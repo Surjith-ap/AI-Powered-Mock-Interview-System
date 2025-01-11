@@ -41,7 +41,7 @@ const AddNewInterview = () => {
   Job Positions: ${jobPosition}, 
   Job Description: ${jobDesc}, 
   Years of Experience: ${jobExperience}. 
-  Based on this information, please provide 5 interview questions with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
+  Based on this information, please provide "${process.env.NEXT_PUBLIC_QUESTION_COUNT}" interview questions with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
 `;
 
     const result = await chatSession.sendMessage(InputPrompt);
@@ -53,6 +53,8 @@ const AddNewInterview = () => {
     console.log(JSON.parse(MockJsonResp));
     // const parsedResp = MockJsonResp
     setJsonResponse(MockJsonResp);
+    setLoading(false);
+    setOpenDialog(false);
 
     if (MockJsonResp) {
       const resp = await db
