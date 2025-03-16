@@ -1,86 +1,200 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { chatSession } from "@/utils/GeminiAIModal";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, FileText } from "lucide-react";
 import { db } from "@/utils/db";
-import { MockInterview } from "@/utils/schema";
+import { MockInterview, Resume } from "@/utils/schema";
 import { v4 as uuidv4 } from "uuid";
 import { useUser } from "@clerk/nextjs";
 import moment from "moment";
 import { useRouter } from "next/navigation";
+import ResumeUpload from "./ResumeUpload";
+import { analyzeResumeText } from "@/utils/resumeParser";
+import { eq } from "drizzle-orm";
+import { toast } from "sonner";
 
-const AddNewInterview = () => {
-  const [openDailog, setOpenDialog] = useState(false);
-  const [jobPosition, setJobPosition] = useState();
-  const [jobDesc, setJobDesc] = useState();
-  const [jobExperience, setJobExperience] = useState();
+const AddNewInterview = ({ initialResumeData }) => {
+  const [openDialog, setOpenDialog] = useState(false);
+  const [jobPosition, setJobPosition] = useState("");
+  const [jobDesc, setJobDesc] = useState("");
+  const [jobExperience, setJobExperience] = useState("");
   const [loading, setLoading] = useState(false);
   const [jsonResponse, setJsonResponse] = useState([]);
+  const [resumeData, setResumeData] = useState(null);
   const { user } = useUser();
   const router = useRouter();
 
-  const onSubmit = async (e) => {
-    setLoading(true);
-    e.preventDefault();
-    console.log(jobPosition, jobDesc, jobExperience);
+  // Handle initial resume data if provided
+  useEffect(() => {
+    if (initialResumeData) {
+      setResumeData(initialResumeData);
+      processResumeText(initialResumeData.extractedText);
+    }
+  }, [initialResumeData]);
 
-    const InputPrompt = `
-  Job Positions: ${jobPosition}, 
-  Job Description: ${jobDesc}, 
-  Years of Experience: ${jobExperience}. 
-  Based on this information, please provide "${process.env.NEXT_PUBLIC_QUESTION_COUNT}" interview questions with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
+  const processResumeText = (text) => {
+    try {
+      if (!text || typeof text !== 'string') {
+        console.error('Invalid text format for resume analysis:', text);
+        return;
+      }
+      
+      const info = analyzeResumeText(text);
+      setJobPosition(info.jobPosition);
+      setJobDesc(info.jobDesc);
+      setJobExperience(info.jobExperience);
+    } catch (error) {
+      console.error('Error processing resume text:', error);
+      toast.error('Error analyzing resume. Using default values.');
+      // Set default values
+      setJobPosition('Not specified');
+      setJobDesc('Not specified');
+      setJobExperience('0');
+    }
+  };
+
+  const handleResumeProcessed = (data) => {
+    setResumeData(data);
+    
+    // Check if data is a string (direct text) or an object with job information
+    if (typeof data === 'string') {
+      // For backward compatibility, still try to extract info from text
+      processResumeText(data);
+    } else if (data && data.extractedText) {
+      // If we have job position directly from the upload component, use it
+      if (data.jobPosition) {
+        setJobPosition(data.jobPosition);
+      }
+      
+      // For other fields, we'll use default values or leave them blank
+      setJobDesc('');
+      setJobExperience('0');
+    } else {
+      console.log('Invalid resume data format:', data);
+    }
+  };
+
+  const onSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setLoading(true);
+    
+    try {
+      // If job position is empty, use a default value
+      const finalJobPosition = jobPosition.trim() || "Not specified";
+      
+      // If job description is empty, use a default value
+      const finalJobDesc = jobDesc.trim() || "Not specified";
+      
+      // If job experience is empty, use a default value
+      const finalJobExperience = jobExperience.trim() || "0";
+      
+      console.log(finalJobPosition, finalJobDesc, finalJobExperience);
+
+      // If we have a resume, use the extracted text for the prompt
+      let resumeText = "";
+      if (resumeData) {
+        if (resumeData.extractedText) {
+          resumeText = resumeData.extractedText;
+        } else if (resumeData.resumeId) {
+          // Fetch the resume text if not already available
+          const result = await db
+            .select()
+            .from(Resume)
+            .where(eq(Resume.resumeId, resumeData.resumeId));
+          
+          if (result.length > 0) {
+            resumeText = result[0].extractedText;
+          }
+        }
+      }
+
+      if (!resumeText) {
+        toast.error("Please upload a resume first");
+        setLoading(false);
+        return;
+      }
+
+      // Construct the prompt with resume text
+      const InputPrompt = `
+Resume Text:
+${resumeText}
+
+Based on the resume text, please provide "${process.env.NEXT_PUBLIC_QUESTION_COUNT}" interview questions with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
 `;
 
-    const result = await chatSession.sendMessage(InputPrompt);
-    const MockJsonResp = result.response
-      .text()
-      .replace("```json", "")
-      .replace("```", "")
-      .trim();
-    console.log(JSON.parse(MockJsonResp));
-    // const parsedResp = MockJsonResp
-    setJsonResponse(MockJsonResp);
-    setLoading(false);
-    setOpenDialog(false);
+      const result = await chatSession.sendMessage(InputPrompt);
+      const MockJsonResp = result.response
+        .text()
+        .replace("```json", "")
+        .replace("```", "")
+        .trim();
+      
+      console.log(JSON.parse(MockJsonResp));
+      setJsonResponse(MockJsonResp);
 
-    if (MockJsonResp) {
-      const resp = await db
-        .insert(MockInterview)
-        .values({
-          mockId: uuidv4(),
-          jsonMockResp: MockJsonResp,
-          jobPosition: jobPosition,
-          jobDesc: jobDesc,
-          jobExperience: jobExperience,
-          createdBy: user?.primaryEmailAddress?.emailAddress,
-          createdAt: moment().format("YYYY-MM-DD"),
-        })
-        .returning({ mockId: MockInterview.mockId });
+      if (MockJsonResp) {
+        const mockId = uuidv4();
         
-      console.log("Inserted ID:", resp);
+        const resp = await db
+          .insert(MockInterview)
+          .values({
+            mockId,
+            jsonMockResp: MockJsonResp,
+            jobPosition: finalJobPosition,
+            jobDesc: finalJobDesc,
+            jobExperience: finalJobExperience,
+            createdBy: user?.primaryEmailAddress?.emailAddress,
+            createdAt: moment().format("YYYY-MM-DD"),
+            resumeId: resumeData?.resumeId || null,
+          })
+          .returning({ mockId: MockInterview.mockId });
+          
+        console.log("Inserted ID:", resp);
 
-      if (resp) {
-        setOpenDialog(false);
-        router.push("/dashboard/interview/" + resp[0]?.mockId);
+        if (resp) {
+          setOpenDialog(false);
+          router.push("/dashboard/interview/" + resp[0]?.mockId);
+        }
+      } else {
+        console.log("ERROR");
+        throw new Error("Failed to generate interview questions");
       }
-    } else {
-      console.log("ERROR");
+    } catch (error) {
+      console.error("Error creating interview:", error);
+      toast.error("Failed to generate interview questions");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  // If initialResumeData is provided, render a button that starts the interview directly
+  if (initialResumeData) {
+    return (
+      <Button 
+        onClick={onSubmit}
+        disabled={loading}
+        className="flex-1"
+      >
+        {loading ? (
+          <>
+            <LoaderCircle className="animate-spin mr-2" />
+            Generating Questions
+          </>
+        ) : (
+          "Start Interview with Resume"
+        )}
+      </Button>
+    );
+  }
 
   return (
     <div>
@@ -88,74 +202,41 @@ const AddNewInterview = () => {
         className="p-10 rounded-lg border bg-secondary hover:scale-105 hover:shadow-sm transition-all cursor-pointer"
         onClick={() => setOpenDialog(true)}
       >
-        <h2 className=" text-lg text-center">+ Add New</h2>
+        <h2 className="text-lg text-center">+ Add New</h2>
       </div>
-      <Dialog open={openDailog}>
+      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl">
-              Tell us more about your job interviwing
+              Upload Your Resume for Interview Questions
             </DialogTitle>
             <DialogDescription>
-              <form onSubmit={onSubmit}>
+              <div className="mt-4">
                 <div className="my-3">
-                  <h2>
-                    Add Details about your job position, job descritpion and
-                    years of experience
-                  </h2>
-
-                  <div className="mt-7 my-3">
-                    <label className="text-black">Job Role/job Position</label>
-                    <Input
-                      className="mt-1"
-                      placeholder="Ex. Full stack Developer"
-                      required
-                      onChange={(e) => setJobPosition(e.target.value)}
-                    />
-                  </div>
-                  <div className="my-5">
-                    <label className="text-black">
-                      Job Description/ Tech stack (In Short)
-                    </label>
-                    <Textarea
-                      className="placeholder-opacity-50"
-                      placeholder="Ex. React, Angular, Nodejs, Mysql, Nosql, Python"
-                      required
-                      onChange={(e) => setJobDesc(e.target.value)}
-                    />
-                  </div>
-                  <div className="my-5">
-                    <label className="text-black">Years of Experience</label>
-                    <Input
-                      className="mt-1"
-                      placeholder="Ex. 5"
-                      max="50"
-                      type="number"
-                      required
-                      onChange={(e) => setJobExperience(e.target.value)}
-                    />
-                  </div>
+                  <h2 className="mb-4">Upload your resume to automatically generate interview questions</h2>
+                  <ResumeUpload onResumeProcessed={handleResumeProcessed} />
+                  
+                  {resumeData && (
+                    <div className="mt-6">
+                      <Button 
+                        type="button" 
+                        onClick={onSubmit}
+                        disabled={loading}
+                        className="w-full"
+                      >
+                        {loading ? (
+                          <>
+                            <LoaderCircle className="animate-spin mr-2" />
+                            Generating From AI
+                          </>
+                        ) : (
+                          "Start Interview"
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-5 justify-end">
-                  <Button
-                    type="button"
-                    variant="goast"
-                    onClick={() => setOpenDialog(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <LoaderCircle className="animate-spin" />
-                        Generating From AI
-                      </>
-                    ) : (
-                      "Start Interview"
-                    )}
-                  </Button>
-                </div>
-              </form>
+              </div>
             </DialogDescription>
           </DialogHeader>
         </DialogContent>

@@ -1,6 +1,16 @@
 import { serial, text, varchar } from "drizzle-orm/pg-core";
 import { pgTable } from "drizzle-orm/pg-core";
 
+export const Resume = pgTable('resume', {
+    id: serial('id').primaryKey(),
+    resumeId: varchar('resumeId').notNull(),
+    fileName: varchar('fileName').notNull(),
+    fileType: varchar('fileType').notNull(),
+    extractedText: text('extractedText').notNull(),
+    userEmail: varchar('userEmail').notNull(),
+    createdAt: varchar('createdAt'),
+});
+
 export const MockInterview = pgTable('mockInterview', {
     id: serial('id').primaryKey(),
     jsonMockResp: text('jsonMockResp').notNull(),
@@ -9,7 +19,8 @@ export const MockInterview = pgTable('mockInterview', {
     jobExperience: varchar('jobExperience').notNull(),
     createdBy: varchar('createdBy').notNull(),
     createdAt: varchar('createdAt'),
-    mockId: varchar('mockId').notNull()
+    mockId: varchar('mockId').notNull(),
+    resumeId: varchar('resumeId')
 });
 
 export const Question = pgTable('question', {
@@ -36,7 +47,9 @@ export const UserAnswer = pgTable('userAnswer',{
     feedback: text('feedback'),
     rating: varchar('rating'),
     userEmail: varchar('userEmail'),
-    createdAt: varchar('createdAt')
+    createdAt: varchar('createdAt'),
+    emotionData: text('emotionData'),
+    confidenceScore: varchar('confidenceScore')
 })
 
 export const Newsletter = pgTable('newsletter',{

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import React, { useContext, useEffect, useState, useRef } from "react";
 import Webcam from "react-webcam";
-import { Mic } from "lucide-react";
+import { Mic, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { chatSession } from "@/utils/GeminiAIModal";
 import { db } from "@/utils/db";
@@ -13,6 +13,7 @@ import { useUser } from "@clerk/nextjs";
 import moment from "moment";
 import { WebCamContext } from "@/app/dashboard/layout";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import EmotionTracker from "./EmotionTracker";
 
 const RecordAnswerSection = ({
   mockInterviewQuestion,
@@ -26,6 +27,12 @@ const RecordAnswerSection = ({
   const { webCamEnabled, setWebCamEnabled } = useContext(WebCamContext);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
+  const webcamRef = useRef(null);
+  
+  // Emotion tracking state
+  const [emotionData, setEmotionData] = useState([]);
+  const [confidenceScore, setConfidenceScore] = useState("7.0"); // Default score
+  const [showEmotionStats, setShowEmotionStats] = useState(false);
 
   const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
 
@@ -34,6 +41,17 @@ const RecordAnswerSection = ({
       updateUserAnswer();
     }
   }, [userAnswer]);
+  
+  // Reset emotion data when question changes
+  useEffect(() => {
+    setEmotionData([]);
+    setConfidenceScore("7.0");
+  }, [activeQuestionIndex]);
+
+  const handleEmotionUpdate = (data) => {
+    setEmotionData(prev => [...prev, data]);
+    setConfidenceScore(data.confidenceMetrics.confidenceScore);
+  };
 
   const startRecording = async () => {
     try {
@@ -121,6 +139,9 @@ const RecordAnswerSection = ({
       } catch (e) {
         throw new Error("Invalid JSON response: " + MockJsonResp);
       }
+      
+      // Calculate average confidence score
+      const avgConfidenceScore = calculateAverageConfidence();
 
       const resp = await db.insert(UserAnswer).values({
         mockIdRef: interviewData?.mockId,
@@ -131,6 +152,8 @@ const RecordAnswerSection = ({
         rating: jsonFeedbackResp?.rating,
         userEmail: user?.primaryEmailAddress?.emailAddress,
         createdAt: moment().format("YYYY-MM-DD"),
+        emotionData: JSON.stringify(emotionData),
+        confidenceScore: avgConfidenceScore
       });
 
       if (resp) {
@@ -144,19 +167,64 @@ const RecordAnswerSection = ({
       setLoading(false);
     }
   };
+  
+  const calculateAverageConfidence = () => {
+    if (!emotionData.length) return confidenceScore;
+    
+    const sum = emotionData.reduce((acc, item) => {
+      return acc + parseFloat(item.confidenceMetrics.confidenceScore);
+    }, 0);
+    
+    return (sum / emotionData.length).toFixed(1);
+  };
 
   return (
     <div className="flex flex-col items-center justify-center overflow-hidden">
-      <div className="flex flex-col justify-center items-center rounded-lg p-5 bg-black mt-4 w-[30rem] ">
+      <div className="flex flex-col justify-center items-center rounded-lg p-5 bg-black mt-4 w-[30rem] relative">
         {webCamEnabled ? (
           <Webcam
+            ref={webcamRef}
             mirrored={true}
             style={{ height: 250, width: "100%", zIndex: 10 }}
           />
         ) : (
           <Image src={"/camera.jpg"} width={200} height={200} alt="Camera placeholder" />
         )}
+        
+        {webCamEnabled && emotionData.length > 0 && (
+          <div 
+            className="absolute top-8 right-8 bg-white/80 rounded-full p-2 cursor-pointer"
+            onClick={() => setShowEmotionStats(!showEmotionStats)}
+            title="Confidence Score"
+          >
+            <div className="flex items-center gap-1">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              <span className="font-medium text-blue-600">{confidenceScore}</span>
+            </div>
+          </div>
+        )}
+        
+        {showEmotionStats && emotionData.length > 0 && (
+          <div className="absolute top-8 left-8 bg-white/90 rounded-lg p-2 text-xs">
+            <div className="font-medium mb-1">Current Emotions:</div>
+            {emotionData.length > 0 && (
+              <div>
+                {Object.entries(emotionData[emotionData.length - 1].expressions || {})
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 3)
+                  .map(([emotion, value]) => (
+                    <div key={emotion} className="flex justify-between">
+                      <span className="capitalize">{emotion}:</span>
+                      <span>{Math.round(value * 100)}%</span>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      
       <div className="md:flex mt-4 md:mt-8 md:gap-5">
         <div className="my-4 md:my-0">
           <Button onClick={() => setWebCamEnabled((prev) => !prev)}>
@@ -177,13 +245,14 @@ const RecordAnswerSection = ({
           )}
         </Button>
       </div>
-      {/* Check transcription code */}
-      {/* {userAnswer && (
-        <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-          <h3 className="font-bold">Transcribed Answer:</h3>
-          <p>{userAnswer}</p>
-        </div>
-      )} */}
+      
+      {/* Emotion Tracker (invisible component) */}
+      {webCamEnabled && webcamRef.current && (
+        <EmotionTracker 
+          videoRef={webcamRef} 
+          onEmotionUpdate={handleEmotionUpdate} 
+        />
+      )}
     </div>
   );
 };

@@ -1,0 +1,39 @@
+SURJITH A P
+ +91 7994360529 ⋄ Palakkad, Kerala
+ surjith.ap007@gmail.com ⋄ Linkedin ⋄ Leetcode ⋄ Github
+ EDUCATION
+ Bachelor of Technology, Government College of Engineering Kannur
+ Computer Science and Engineering: CGPA: 6.01
+ Diploma, Government Polytechnic College Palakkad
+ Computer Hardware Engineering: CGPA:7.01
+ Higher Secondary, BEM HSS Palakkad
+ Computer Science: Marks in percentage:72.75
+ SKILLS
+ Expected May 2025
+ 2018- 2021
+ 2016- 2018
+ Technical Skills
+ Soft Skills
+ Area Of Interest
+ EXPERIENCE
+ C, Python, SQL, HTML, CSS, JavaScript, React
+ Communication, Teamwork, Workethic
+ Web Development, Machine Learning
+ Machine Operator
+ Nokia-Telecommunications
+ Oct 2021- Apr 2022
+ Chennai,Tamilnadu
+ • Achieved significant experience in hardware production, team collaboration, and leadership.
+ • Contributed to the testing and manufacturing of various devices and components
+ PROJECTS
+ PocketGuard Built a tool that aims to develop a comprehensive financial management website,providing users with
+ tools for authentication, Budgeting, Expense tracking, Report generation by using MERN stack.
+ SmartLock Developed a secure, Bluetooth-enabled door locking system using Arduino, allowing remote access con
+trol via a mobile device. The system ensures enhanced home security by utilizing a Bluetooth module to wirelessly
+ communicate with the Arduino microcontroller, providing a user-friendly and efficient solution for locking and un
+locking doors.
+ LANGUAGES KNOWN
+ English Working Professional Proficiency
+ Malayalam Native or Bilingual Proficiency
+ Hindi Beginner level Proficiency
+ Tamil Beginner level Proficiency
