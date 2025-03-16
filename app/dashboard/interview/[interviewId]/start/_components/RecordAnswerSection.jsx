@@ -19,6 +19,7 @@ const RecordAnswerSection = ({
   mockInterviewQuestion,
   activeQuestionIndex,
   interviewData,
+  onAnswerSubmitted,
 }) => {
   const [userAnswer, setUserAnswer] = useState("");
   const { user } = useUser();
@@ -115,6 +116,10 @@ const RecordAnswerSection = ({
   const updateUserAnswer = async () => {
     try {
       setLoading(true);
+      
+      // Check if the current question is a generated one
+      const isGeneratedQuestion = mockInterviewQuestion[activeQuestionIndex]?.isGenerated;
+      
       const feedbackPrompt =
         "Question:" +
         mockInterviewQuestion[activeQuestionIndex]?.Question +
@@ -143,10 +148,15 @@ const RecordAnswerSection = ({
       // Calculate average confidence score
       const avgConfidenceScore = calculateAverageConfidence();
 
+      // For generated questions, we don't need to store the "correct" answer
+      const correctAnswer = isGeneratedQuestion 
+        ? null 
+        : mockInterviewQuestion[activeQuestionIndex]?.Answer;
+
       const resp = await db.insert(UserAnswer).values({
         mockIdRef: interviewData?.mockId,
         question: mockInterviewQuestion[activeQuestionIndex]?.Question,
-        correctAns: mockInterviewQuestion[activeQuestionIndex]?.Answer,
+        correctAns: correctAnswer,
         userAns: userAnswer,
         feedback: jsonFeedbackResp?.feedback,
         rating: jsonFeedbackResp?.rating,
@@ -158,7 +168,16 @@ const RecordAnswerSection = ({
 
       if (resp) {
         toast("User Answer recorded successfully");
+        
+        // If this is not a generated question, trigger generation of follow-up questions
+        if (!isGeneratedQuestion && typeof onAnswerSubmitted === 'function') {
+          // Wait a moment before triggering question generation
+          setTimeout(() => {
+            onAnswerSubmitted();
+          }, 1000);
+        }
       }
+      
       setUserAnswer("");
       setLoading(false);
     } catch (error) {
@@ -177,6 +196,10 @@ const RecordAnswerSection = ({
     
     return (sum / emotionData.length).toFixed(1);
   };
+
+  // Check if the current question is a generated follow-up
+  const isGeneratedQuestion = mockInterviewQuestion && 
+    mockInterviewQuestion[activeQuestionIndex]?.isGenerated;
 
   return (
     <div className="flex flex-col items-center justify-center overflow-hidden">
@@ -235,6 +258,7 @@ const RecordAnswerSection = ({
           variant="outline"
           onClick={isRecording ? stopRecording : startRecording}
           disabled={loading}
+          className={isGeneratedQuestion ? "border-blue-500 text-blue-600" : ""}
         >
           {isRecording ? (
             <h2 className="text-red-400 flex gap-2 ">
