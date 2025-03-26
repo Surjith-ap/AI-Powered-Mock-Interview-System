@@ -39,9 +39,9 @@ const ResumeUpload = ({ onResumeProcessed }) => {
       }
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('resume', file);
 
-      const response = await fetch(`${API_URL}/api/parse-resume`, {
+      const response = await fetch(`${API_URL}/parse-resume`, {
         method: 'POST',
         body: formData,
       });

@@ -33,10 +33,9 @@ export const Question = pgTable('question', {
     company: varchar('company').notNull(),
     createdBy: varchar('createdBy').notNull(),
     createdAt: varchar('createdAt'),
-    mockId: varchar('mockId').notNull()
+    mockId: varchar('mockId').notNull(),
+    resumeId: varchar('resumeId')
 });
-
-
 
 export const UserAnswer = pgTable('userAnswer',{
     id: serial('id').primaryKey(),

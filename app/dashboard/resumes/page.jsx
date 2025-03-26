@@ -10,6 +10,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import ResumeUpload from '../_components/ResumeUpload';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { v4 as uuidv4 } from 'uuid';
+import moment from 'moment';
+import { Question } from '@/utils/schema';
 
 const ResumesPage = () => {
   const [resumes, setResumes] = useState([]);
@@ -64,6 +68,64 @@ const ResumesPage = () => {
 
   const createInterviewFromResume = (resume) => {
     router.push(`/dashboard?resumeId=${resume.resumeId}`);
+  };
+
+  const generateQuestionsFromResume = async (resume) => {
+    try {
+      // Initialize Gemini AI
+      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      
+      // Generate a prompt based on resume content
+      const prompt = `
+        Based on the following resume text, generate ${process.env.NEXT_PUBLIC_QUESTION_COUNT} technical interview questions 
+        that would be relevant for this candidate. The questions should test both 
+        technical knowledge and experience mentioned in the resume.
+        
+        Resume Text:
+        ${resumeText}
+        
+        For each question, also provide a model answer that would be expected from a strong candidate.
+        Format your response as a JSON array with "Question" and "Answer" fields.
+        Example: [{"Question": "...", "Answer": "..."}]
+      `;
+      
+      // Get response from AI
+      const result = await model.generateContent(prompt);
+      const questionsText = result.response.text().trim();
+      
+      // Parse the response into JSON
+      let questionsJson;
+      try {
+        questionsJson = JSON.parse(questionsText.replace(/```json|```/g, '').trim());
+      } catch (error) {
+        console.error("Failed to parse AI response:", error);
+        toast.error("Failed to parse AI-generated questions");
+        return;
+      }
+      
+      // Generate a mock interview ID
+      const mockId = uuidv4();
+      
+      // Save questions to the database
+      await db.insert(Question).values({
+        mockId: mockId,
+        MockQuestionJsonResp: JSON.stringify(questionsJson),
+        jobPosition: "Based on Resume",
+        jobDesc: `Generated from resume: ${resume.fileName}`,
+        createdBy: user?.primaryEmailAddress?.emailAddress,
+        createdAt: moment().format("YYYY-MM-DD"),
+        resumeId: resume.resumeId
+      });
+      
+      toast.success("Questions generated successfully!");
+      
+      // Navigate to the generated questions
+      router.push(`/dashboard/pyq/${mockId}`);
+    } catch (error) {
+      console.error("Error generating questions:", error);
+      toast.error("Failed to generate questions from resume");
+    }
   };
 
   return (

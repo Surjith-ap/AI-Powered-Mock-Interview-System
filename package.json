@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "db:push": "npx drizzle-kit push",
-    "db:studio": "npx drizzle-kit studio"
+    "db:studio": "npx drizzle-kit studio",
+    "start:emotion-server": "cd server && npm run dev",
+    "start:all": "node start-servers.js",
+    "setup:emotion-server": "cd server && npm install"
   },
   "dependencies": {
     "@clerk/nextjs": "^5.1.5",
