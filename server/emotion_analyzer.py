@@ -9,7 +9,7 @@ import traceback
 import cv2
 import numpy as np
 import gc
-
+import tempfile
 def analyze_emotion(image_path):
     """
     Analyze emotions in an image using DeepFace
@@ -17,6 +17,20 @@ def analyze_emotion(image_path):
     try:
         # Clear memory before processing
         gc.collect()
+
+        # If base64 image is provided, save to a temporary file
+        if base64_image:
+            # Remove data URL prefix if present
+            if base64_image.startswith('data:image'):
+                base64_image = base64_image.split(',')[1]
+            
+            # Decode base64
+            image_bytes = base64.b64decode(base64_image)
+            
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                temp_file.write(image_bytes)
+                image_path = temp_file.name
         
         # Read image with OpenCV first
         img = cv2.imread(image_path)
@@ -58,8 +72,13 @@ def analyze_emotion(image_path):
         
         # Calculate confidence score
         confidence = emotion_weights.get(dominant_emotion, 0.5)
+
+        # Clean up temporary file if created
+        if base64_image and 'temp_file' in locals():
+            os.unlink(image_path)
         
         return {
+            'success': True,
             'emotions': emotion_data,
             'dominant_emotion': dominant_emotion,
             'confidence': confidence
@@ -68,6 +87,7 @@ def analyze_emotion(image_path):
     except Exception as e:
         print(f"Error in analyze_emotion: {str(e)}")
         return {
+            'success': False,
             'emotions': {'neutral': 1.0},
             'dominant_emotion': 'neutral',
             'confidence': 0.5

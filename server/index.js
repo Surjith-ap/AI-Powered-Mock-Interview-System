@@ -126,15 +126,27 @@ async function detectEmotionsWithPython(imagePath) {
 
 // Endpoint to analyze emotions from base64 image
 app.post('/analyze-emotion', upload.single('image'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No image file provided' });
-  }
-
   try {
-    // Analyze emotions using Python DeepFace script
-    const analysisResult = await detectEmotionsWithPython(req.file.path);
+    // Check if image file is uploaded or base64 data is provided
+    let imagePath;
+    if (req.file) {
+      // If file is uploaded
+      imagePath = req.file.path;
+    } else if (req.body.imageData) {
+      // If base64 data is sent
+      const pythonProcess = spawn('python', [
+        path.join(__dirname, 'emotion_analyzer.py'),
+        '--base64', req.body.imageData
+      ]);
+      
+      // Rest of the existing spawn logic remains the same...
+    } else {
+      return res.status(400).json({ error: 'No image provided' });
+    }
 
-    // Send the response with timestamp
+    // Existing code for file upload remains the same
+    const analysisResult = await detectEmotionsWithPython(imagePath);
+
     res.json({
       timestamp: Date.now(),
       expressions: analysisResult.expressions,

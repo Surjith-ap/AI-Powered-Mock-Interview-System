@@ -104,7 +104,7 @@ const Feedback = ({ params }) => {
          <h2 className="text-3xl font-bold text-green-500">Congratulations</h2>
          <h2 className="font-bold text-2xl">Here is your interview feedback</h2>
           <h2 className="text-primary text-lg my-3">
-            Your overall interview rating{" "}
+            Your overall answer similarity rating{" "}
             <strong
               className={`${
                 overallRating >= 5 ? "text-green-500" : "text-red-600"
@@ -124,8 +124,7 @@ const Feedback = ({ params }) => {
           )}
           
           <h2 className="text-sm text-gray-500 mt-6">
-            Find below interview question with correct answer, Your answer and
-            feedback for improvement
+            Find below each interview question with the correct answer, your answer, and similarity-based feedback
           </h2>
           {feedbackList &&
             feedbackList.map((item, index) => (
@@ -137,8 +136,8 @@ const Feedback = ({ params }) => {
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap gap-2">
                       <h2 className="text-red-500 p-2 border rounded-lg">
-                        <strong>Rating: </strong>
-                        {item.rating}
+                        <strong>Similarity Score: </strong>
+                        {item.rating}/10
                       </h2>
                       {item.confidenceScore && (
                         <h2 className="text-blue-500 p-2 border rounded-lg">

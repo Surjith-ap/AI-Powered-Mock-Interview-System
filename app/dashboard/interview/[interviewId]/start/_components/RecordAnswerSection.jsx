@@ -14,6 +14,7 @@ import moment from "moment";
 import { WebCamContext } from "@/app/dashboard/layout";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import EmotionTracker from "./EmotionTracker";
+import { evaluateAnswerSimilarity } from "@/utils/answerEvaluator";
 
 const RecordAnswerSection = ({
   mockInterviewQuestion,
@@ -120,46 +121,51 @@ const RecordAnswerSection = ({
       // Check if the current question is a generated one
       const isGeneratedQuestion = mockInterviewQuestion[activeQuestionIndex]?.isGenerated;
       
-      const feedbackPrompt =
-        "Question:" +
-        mockInterviewQuestion[activeQuestionIndex]?.Question +
-        ", User Answer:" +
-        userAnswer +
-        " , Depends on question and user answer for given interview question" +
-        " please give us rating for answer and feedback as area of improvement if any " +
-        "in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
-
-      const result = await chatSession.sendMessage(feedbackPrompt);
-
-      let MockJsonResp = result.response.text();
-      console.log(MockJsonResp);
-
-      // Removing possible extra text around JSON
-      MockJsonResp = MockJsonResp.replace("```json", "").replace("```", "");
-
-      // Attempt to parse JSON
+      // Get the current question and answer
+      const currentQuestion = mockInterviewQuestion[activeQuestionIndex]?.Question;
+      const correctAnswer = isGeneratedQuestion 
+        ? null 
+        : mockInterviewQuestion[activeQuestionIndex]?.Answer;
+      
       let jsonFeedbackResp;
-      try {
-        jsonFeedbackResp = JSON.parse(MockJsonResp);
-      } catch (e) {
-        throw new Error("Invalid JSON response: " + MockJsonResp);
+      
+      if (!isGeneratedQuestion && correctAnswer) {
+        // Use similarity-based scoring for regular questions
+        jsonFeedbackResp = await evaluateAnswerSimilarity(
+          currentQuestion,
+          userAnswer,
+          correctAnswer
+        );
+      } else {
+        // Use the existing method for generated questions
+        const feedbackPrompt = "Question:" + currentQuestion +
+          ", User Answer:" + userAnswer +
+          " , Depends on question and user answer for given interview question" +
+          " please give us rating for answer and feedback as area of improvement if any " +
+          "in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
+
+        const result = await chatSession.sendMessage(feedbackPrompt);
+        let MockJsonResp = result.response.text();
+        MockJsonResp = MockJsonResp.replace("```json", "").replace("```", "");
+        
+        try {
+          jsonFeedbackResp = JSON.parse(MockJsonResp);
+        } catch (e) {
+          throw new Error("Invalid JSON response: " + MockJsonResp);
+        }
       }
       
       // Calculate average confidence score
       const avgConfidenceScore = calculateAverageConfidence();
 
-      // For generated questions, we don't need to store the "correct" answer
-      const correctAnswer = isGeneratedQuestion 
-        ? null 
-        : mockInterviewQuestion[activeQuestionIndex]?.Answer;
-
+      // Save to database (using existing schema)
       const resp = await db.insert(UserAnswer).values({
         mockIdRef: interviewData?.mockId,
-        question: mockInterviewQuestion[activeQuestionIndex]?.Question,
+        question: currentQuestion,
         correctAns: correctAnswer,
         userAns: userAnswer,
-        feedback: jsonFeedbackResp?.feedback,
-        rating: jsonFeedbackResp?.rating,
+        feedback: jsonFeedbackResp.feedback,
+        rating: jsonFeedbackResp.rating.toString(),
         userEmail: user?.primaryEmailAddress?.emailAddress,
         createdAt: moment().format("YYYY-MM-DD"),
         emotionData: JSON.stringify(emotionData),
@@ -167,7 +173,7 @@ const RecordAnswerSection = ({
       });
 
       if (resp) {
-        toast("User Answer recorded successfully");
+        toast("Answer evaluated with similarity scoring");
         
         // If this is not a generated question, trigger generation of follow-up questions
         if (!isGeneratedQuestion && typeof onAnswerSubmitted === 'function') {
@@ -182,7 +188,7 @@ const RecordAnswerSection = ({
       setLoading(false);
     } catch (error) {
       console.error(error);
-      toast("An error occurred while recording the user answer");
+      toast("Failed to evaluate answer");
       setLoading(false);
     }
   };
