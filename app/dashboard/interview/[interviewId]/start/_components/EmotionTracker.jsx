@@ -8,6 +8,7 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
   const intervalRef = useRef(null);
   const capturingCanvasRef = useRef(null);
+  const abortControllerRef = useRef(null);
   
   // Server URL for emotion analysis
   const EMOTION_SERVER_URL = process.env.NEXT_PUBLIC_EMOTION_SERVER_URL || 'http://localhost:3001';
@@ -32,34 +33,67 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
     
     // Cleanup on unmount
     return () => {
+      // Clear the interval to stop tracking
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      
+      // Abort any in-progress fetch requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      
+      // Remove canvas reference
+      if (capturingCanvasRef.current) {
+        // Clear the canvas context to release memory
+        const ctx = capturingCanvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, capturingCanvasRef.current.width, capturingCanvasRef.current.height);
+        }
+        capturingCanvasRef.current = null;
       }
     };
   }, []);
 
   const checkServerAvailability = async () => {
     try {
+      const controller = new AbortController();
+      const signal = controller.signal;
+      abortControllerRef.current = controller;
+      
       const response = await fetch(`${EMOTION_SERVER_URL}`, { 
         method: 'GET',
-        // Set a timeout to avoid long waiting times
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(10000) // Timeout after 10 seconds
       });
       return response.ok;
     } catch (error) {
       console.error("Emotion server check failed:", error);
       return false;
+    } finally {
+      abortControllerRef.current = null;
     }
   };
 
   const startEmotionTracking = () => {
-    // Start capturing frames and analyzing emotions every 2 seconds
+    // Stop any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    
+    // Start capturing frames and analyzing emotions every 5 seconds
     intervalRef.current = setInterval(() => {
       captureAndAnalyzeFrame();
     }, 5000);
   };
 
   const captureAndAnalyzeFrame = async () => {
+    // Abort any previous in-progress requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
     if (isProcessing || !videoRef.current || !videoRef.current.video) {
       return;
     }
@@ -67,20 +101,43 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
     try {
       setIsProcessing(true);
       
+      // Create a new AbortController for this request
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      
       // Capture frame from webcam
       const video = videoRef.current.video;
       const canvas = capturingCanvasRef.current;
+      
+      if (!canvas) {
+        throw new Error("Canvas not available");
+      }
+      
       const context = canvas.getContext('2d');
       
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Set canvas dimensions to a smaller size to reduce memory usage
+      // Smaller images are faster to process and use less memory
+      const maxWidth = 320; // Significantly reduced size
+      const maxHeight = 240;
       
-      // Draw video frame to canvas
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Calculate aspect ratio to maintain proportions
+      const aspectRatio = video.videoWidth / video.videoHeight;
+      let width = maxWidth;
+      let height = width / aspectRatio;
       
-      // Convert canvas to base64 image data
-      const imageData = canvas.toDataURL('image/jpeg');
+      if (height > maxHeight) {
+        height = maxHeight;
+        width = height * aspectRatio;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw video frame to canvas with reduced dimensions
+      context.drawImage(video, 0, 0, width, height);
+      
+      // Convert canvas to base64 image data with low quality to reduce size
+      const imageData = canvas.toDataURL('image/jpeg', 0.7); // Lower quality for smaller size
       
       if (!isFallbackMode) {
         try {
@@ -91,11 +148,12 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ imageData }),
-            // Set a timeout to avoid long waiting times
-            signal: AbortSignal.timeout(5000)
+            signal: controller.signal
           });
           
           if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Server error ${response.status}: ${errorText}`);
             throw new Error(`Server error: ${response.status}`);
           }
           
@@ -118,6 +176,12 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
           // Send the emotion data to parent component
           onEmotionUpdate(emotionData);
         } catch (error) {
+          // Ignore aborted request errors
+          if (error.name === 'AbortError') {
+            console.log('Emotion analysis request was aborted');
+            return;
+          }
+          
           console.error("Error analyzing emotions with server:", error);
           
           // Increment consecutive errors counter
@@ -147,6 +211,17 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
       }
     } finally {
       setIsProcessing(false);
+      
+      // Clean up canvas memory after processing
+      if (capturingCanvasRef.current) {
+        const ctx = capturingCanvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, capturingCanvasRef.current.width, capturingCanvasRef.current.height);
+        }
+      }
+      
+      // Clear abort controller reference when done
+      abortControllerRef.current = null;
     }
   };
 

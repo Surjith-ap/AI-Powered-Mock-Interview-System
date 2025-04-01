@@ -35,6 +35,7 @@ const RecordAnswerSection = ({
   const [emotionData, setEmotionData] = useState([]);
   const [confidenceScore, setConfidenceScore] = useState("7.0"); // Default score
   const [showEmotionStats, setShowEmotionStats] = useState(false);
+  const [emotionError, setEmotionError] = useState(false);
 
   const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
 
@@ -48,11 +49,23 @@ const RecordAnswerSection = ({
   useEffect(() => {
     setEmotionData([]);
     setConfidenceScore("7.0");
+    setEmotionError(false);
   }, [activeQuestionIndex]);
 
   const handleEmotionUpdate = (data) => {
-    setEmotionData(prev => [...prev, data]);
-    setConfidenceScore(data.confidenceMetrics.confidenceScore);
+    try {
+      // Reset error state on successful update
+      setEmotionError(false);
+      setEmotionData(prev => [...prev, data]);
+      
+      // Only update score if confidenceMetrics exists and has a score
+      if (data && data.confidenceMetrics && data.confidenceMetrics.confidenceScore) {
+        setConfidenceScore(data.confidenceMetrics.confidenceScore);
+      }
+    } catch (error) {
+      console.error("Error handling emotion update:", error);
+      setEmotionError(true);
+    }
   };
 
   const startRecording = async () => {
@@ -118,45 +131,32 @@ const RecordAnswerSection = ({
     try {
       setLoading(true);
       
-      // Check if the current question is a generated one
-      const isGeneratedQuestion = mockInterviewQuestion[activeQuestionIndex]?.isGenerated;
-      
       // Get the current question and answer
-      const currentQuestion = mockInterviewQuestion[activeQuestionIndex]?.Question;
-      const correctAnswer = isGeneratedQuestion 
-        ? null 
-        : mockInterviewQuestion[activeQuestionIndex]?.Answer;
+      const currentQuestion = mockInterviewQuestion?.[activeQuestionIndex]?.Question;
+      const correctAnswer = mockInterviewQuestion?.[activeQuestionIndex]?.Answer;
       
-      let jsonFeedbackResp;
-      
-      if (!isGeneratedQuestion && correctAnswer) {
-        // Use similarity-based scoring for regular questions
-        jsonFeedbackResp = await evaluateAnswerSimilarity(
-          currentQuestion,
-          userAnswer,
-          correctAnswer
-        );
-      } else {
-        // Use the existing method for generated questions
-        const feedbackPrompt = "Question:" + currentQuestion +
-          ", User Answer:" + userAnswer +
-          " , Depends on question and user answer for given interview question" +
-          " please give us rating for answer and feedback as area of improvement if any " +
-          "in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
-
-        const result = await chatSession.sendMessage(feedbackPrompt);
-        let MockJsonResp = result.response.text();
-        MockJsonResp = MockJsonResp.replace("```json", "").replace("```", "");
-        
-        try {
-          jsonFeedbackResp = JSON.parse(MockJsonResp);
-        } catch (e) {
-          throw new Error("Invalid JSON response: " + MockJsonResp);
-        }
+      if (!currentQuestion || !correctAnswer) {
+        throw new Error('Missing question or answer data');
       }
+
+      // Use similarity-based scoring for all questions (both original and follow-up)
+      const jsonFeedbackResp = await evaluateAnswerSimilarity(
+        currentQuestion,
+        userAnswer,
+        correctAnswer
+      );
       
       // Calculate average confidence score
       const avgConfidenceScore = calculateAverageConfidence();
+
+      // Ensure emotionData is properly formatted for storage
+      const safeEmotionData = emotionData.length > 0 ? 
+        JSON.stringify(emotionData) : 
+        JSON.stringify([{
+          timestamp: Date.now(),
+          expressions: { neutral: 1.0 },
+          confidenceMetrics: { confidenceScore: avgConfidenceScore || "7.0", primaryEmotion: "neutral" }
+        }]);
 
       // Save to database (using existing schema)
       const resp = await db.insert(UserAnswer).values({
@@ -168,7 +168,7 @@ const RecordAnswerSection = ({
         rating: jsonFeedbackResp.rating.toString(),
         userEmail: user?.primaryEmailAddress?.emailAddress,
         createdAt: moment().format("YYYY-MM-DD"),
-        emotionData: JSON.stringify(emotionData),
+        emotionData: safeEmotionData,
         confidenceScore: avgConfidenceScore
       });
 
@@ -177,9 +177,9 @@ const RecordAnswerSection = ({
         
         // If this is not a generated question, trigger generation of follow-up questions
         if (!isGeneratedQuestion && typeof onAnswerSubmitted === 'function') {
-          // Wait a moment before triggering question generation
+          // Pass the current answer directly to the parent component
           setTimeout(() => {
-            onAnswerSubmitted();
+            onAnswerSubmitted(userAnswer);
           }, 1000);
         }
       }
@@ -194,18 +194,24 @@ const RecordAnswerSection = ({
   };
   
   const calculateAverageConfidence = () => {
-    if (!emotionData.length) return confidenceScore;
+    if (!emotionData || !emotionData.length) return confidenceScore;
     
-    const sum = emotionData.reduce((acc, item) => {
-      return acc + parseFloat(item.confidenceMetrics.confidenceScore);
-    }, 0);
-    
-    return (sum / emotionData.length).toFixed(1);
+    try {
+      const sum = emotionData.reduce((acc, item) => {
+        const score = parseFloat(item?.confidenceMetrics?.confidenceScore || 0);
+        return acc + score;
+      }, 0);
+      
+      return (sum / emotionData.length).toFixed(1);
+    } catch (error) {
+      console.error("Error calculating confidence:", error);
+      return confidenceScore; // Return default if calculation fails
+    }
   };
 
   // Check if the current question is a generated follow-up
   const isGeneratedQuestion = mockInterviewQuestion && 
-    mockInterviewQuestion[activeQuestionIndex]?.isGenerated;
+    mockInterviewQuestion[activeQuestionIndex]?.isGenerated === true;
 
   return (
     <div className="flex flex-col items-center justify-center overflow-hidden">

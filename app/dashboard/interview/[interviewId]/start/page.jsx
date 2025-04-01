@@ -11,11 +11,13 @@ import { toast } from "sonner";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const StartInterview = ({ params }) => {
-  const [interviewData, setInterviewData] = useState();
-  const [mockInterviewQuestion, setMockInterviewQuestion] = useState();
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [mockInterviewQuestion, setMockInterviewQuestion] = useState(null);
+  const [userAnswers, setUserAnswers] = useState([]);
+  const [interviewData, setInterviewData] = useState(null);
   const [generatedQuestions, setGeneratedQuestions] = useState([]);
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
+  const [allQuestions, setAllQuestions] = useState([]);
   
   useEffect(() => {
     GetInterviewDetails();
@@ -27,6 +29,30 @@ const StartInterview = ({ params }) => {
       fetchUserAnswersAndGenerateQuestions();
     }
   }, [mockInterviewQuestion]);
+
+  useEffect(() => {
+    const combineQuestions = () => {
+      // Check if mockInterviewQuestion is available and is an array
+      if (!mockInterviewQuestion || !Array.isArray(mockInterviewQuestion)) {
+        setAllQuestions(generatedQuestions.length > 0 ? [...generatedQuestions] : []);
+        return;
+      }
+      
+      const combinedQuestions = [...mockInterviewQuestion];
+      
+      // Add generated questions if there are any
+      if (generatedQuestions.length > 0) {
+        // Append generated questions to the end of the original questions
+        generatedQuestions.forEach(q => {
+          combinedQuestions.push(q);
+        });
+      }
+      
+      setAllQuestions(combinedQuestions);
+    };
+    
+    combineQuestions();
+  }, [mockInterviewQuestion, generatedQuestions]);
 
   const GetInterviewDetails = async () => {
     const result = await db
@@ -50,14 +76,14 @@ const StartInterview = ({ params }) => {
 
       if (userAnswers && userAnswers.length > 0) {
         // Generate new questions based on user answers
-        generateQuestionsFromAnswers(userAnswers);
+        generateQuestionsFromAnswers(userAnswers[0].answer);
       }
     } catch (error) {
       console.error("Error fetching user answers:", error);
     }
   };
 
-  const generateQuestionsFromAnswers = async (userAnswers) => {
+  const generateQuestionsFromAnswers = async (answer) => {
     try {
       setIsGeneratingQuestion(true);
       
@@ -65,95 +91,142 @@ const StartInterview = ({ params }) => {
       const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
-      // Process each user answer to generate a follow-up question
-      const newQuestions = [];
+      const prompt = `Based on this interview answer: "${answer}", generate 2 relevant follow-up questions that would help assess the candidate's knowledge and experience. 
+
+For each question, also provide a model answer that would be considered a good response. 
+
+IMPORTANT: Format your response as a valid JSON array with objects containing 'question' and 'answer' fields. DO NOT include any markdown formatting (no \`\`\` or \`\`\`json). Just return the raw JSON.
+
+Example format: [{"question": "What specific challenges did you face when implementing X?", "answer": "The main challenges were..."}, {"question": "How would you improve Y in your previous project?", "answer": "I would improve Y by..."}]`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      let text = response.text();
       
-      for (const answer of userAnswers) {
-        if (answer.userAns && answer.userAns.length > 10) {
-          const prompt = `
-            Based on the following interview question and the candidate's answer, 
-            generate a follow-up question that digs deeper into the candidate's response.
-            The follow-up question should be challenging but relevant to the original topic.
-            
-            Original Question: ${answer.question}
-            Candidate's Answer: ${answer.userAns}
-            
-            Return only the follow-up question without any additional text or formatting.
-          `;
+      // Clean the response text by removing markdown formatting
+      text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      console.log("Cleaned JSON response:", text);
+      
+      try {
+        const questions = JSON.parse(text);
+        
+        if (Array.isArray(questions) && questions.length > 0) {
+          const formattedQuestions = questions.map(q => ({
+            Question: q.question || "",
+            Answer: q.answer || "",
+            isGenerated: true
+          }));
           
-          const result = await model.generateContent(prompt);
-          const followUpQuestion = result.response.text().trim();
-          
-          if (followUpQuestion) {
-            newQuestions.push({
-              Question: followUpQuestion,
-              Answer: "This is a dynamically generated follow-up question based on your previous answer.",
-              isGenerated: true,
-              originalQuestionIndex: mockInterviewQuestion.findIndex(q => q.Question === answer.question)
-            });
-          }
+          setGeneratedQuestions(prev => [...prev, ...formattedQuestions]);
+          toast.success(`Generated ${formattedQuestions.length} follow-up questions`);
+        } else {
+          throw new Error('Invalid question format returned');
         }
-      }
-      
-      // Limit to the same number of questions as the original set
-      const limitedQuestions = newQuestions.slice(0, mockInterviewQuestion.length);
-      setGeneratedQuestions(limitedQuestions);
-      
-      if (limitedQuestions.length > 0) {
-        toast.success(`Generated ${limitedQuestions.length} follow-up questions based on your answers`);
+      } catch (jsonError) {
+        console.error('Error parsing JSON response:', jsonError, text);
+        
+        // Fallback to regex extraction if JSON parsing fails
+        try {
+          // Try to extract questions and answers using regex as a fallback
+          const questionMatches = text.match(/"question"\s*:\s*"([^"]*)"/g);
+          const answerMatches = text.match(/"answer"\s*:\s*"([^"]*)"/g);
+          
+          if (questionMatches && answerMatches && questionMatches.length === answerMatches.length) {
+            const formattedQuestions = questionMatches.map((q, index) => {
+              const question = q.match(/"question"\s*:\s*"([^"]*)"/)[1];
+              const answer = answerMatches[index].match(/"answer"\s*:\s*"([^"]*)"/)[1];
+              
+              return {
+                Question: question,
+                Answer: answer,
+                isGenerated: true
+              };
+            });
+            
+            setGeneratedQuestions(prev => [...prev, ...formattedQuestions]);
+            toast.success(`Generated ${formattedQuestions.length} follow-up questions`);
+          } else {
+            throw new Error('Failed to extract questions and answers');
+          }
+        } catch (regexError) {
+          console.error('Fallback extraction failed:', regexError);
+          toast.error('Failed to generate follow-up questions');
+        }
       }
       
       setIsGeneratingQuestion(false);
     } catch (error) {
-      console.error("Error generating questions:", error);
+      console.error('Error generating follow-up questions:', error);
       setIsGeneratingQuestion(false);
-      toast.error("Failed to generate follow-up questions");
+      toast.error('Failed to generate follow-up questions');
     }
   };
 
-  // Combine original and generated questions for display
-  const allQuestions = mockInterviewQuestion 
-    ? [...(mockInterviewQuestion || []), ...(generatedQuestions || [])]
-    : [];
+  // Function to handle user answer submission and generate follow-up questions
+  const onAnswerSubmitted = async (answer) => {
+    if (answer && answer.length > 10) {
+      // Generate follow-up questions based on the answer
+      await generateQuestionsFromAnswers(answer);
+    }
+  };
+
+  const prevQuestion = () => {
+    if (activeQuestionIndex > 0) {
+      setActiveQuestionIndex(activeQuestionIndex - 1);
+    }
+  };
+
+  const nextQuestion = () => {
+    if (activeQuestionIndex < allQuestions.length - 1) {
+      setActiveQuestionIndex(activeQuestionIndex + 1);
+    }
+  };
 
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 my-10">
-        {/* Question Section */}
-        <QuestionSection
-          mockInterviewQuestion={allQuestions}
-          activeQuestionIndex={activeQuestionIndex}
-          isGeneratingQuestion={isGeneratingQuestion}
-        />
-
-        {/* Video/audio Recording */}
-        <RecordAnswerSection
-          mockInterviewQuestion={allQuestions}
-          activeQuestionIndex={activeQuestionIndex}
-          interviewData={interviewData}
-          onAnswerSubmitted={fetchUserAnswersAndGenerateQuestions}
-        />
+      <div className="flex flex-col md:flex-row gap-5">
+        <div className="md:w-1/2">
+          {allQuestions && allQuestions.length > 0 && (
+            <QuestionSection
+              mockInterviewQuestion={allQuestions}
+              activeQuestionIndex={activeQuestionIndex}
+              isGeneratingQuestion={isGeneratingQuestion}
+            />
+          )}
+        </div>
+        <div className="md:w-1/2">
+          {allQuestions && allQuestions.length > 0 && (
+            <RecordAnswerSection
+              mockInterviewQuestion={allQuestions}
+              activeQuestionIndex={activeQuestionIndex}
+              interviewData={interviewData}
+              onAnswerSubmitted={onAnswerSubmitted}
+            />
+          )}
+        </div>
       </div>
-      <div className="flex gap-3 my-5 md:my-0 md:justify-end md:gap-6">
-        {activeQuestionIndex > 0 && (
-          <Button
-            onClick={() => setActiveQuestionIndex(activeQuestionIndex - 1)}
-          >
-            Previous Question
-          </Button>
-        )}
-        {activeQuestionIndex != allQuestions?.length - 1 && (
-          <Button
-            onClick={() => setActiveQuestionIndex(activeQuestionIndex + 1)}
-          >
-            Next Question
-          </Button>
-        )}
-        {activeQuestionIndex == allQuestions?.length - 1 && (
+      <div className="flex justify-center mt-6">
+        <Button
+          onClick={prevQuestion}
+          disabled={activeQuestionIndex === 0 || !allQuestions || allQuestions.length === 0}
+          className="mr-3"
+        >
+          Previous
+        </Button>
+        <Button
+          onClick={nextQuestion}
+          disabled={!allQuestions || activeQuestionIndex >= allQuestions.length - 1}
+          className="ml-3"
+        >
+          Next
+        </Button>
+        {allQuestions && activeQuestionIndex === allQuestions.length - 1 && (
           <Link
-            href={"/dashboard/interview/" + interviewData?.mockId + "/feedback"}
+            href={`/dashboard/interview/${params.interviewId}/feedback`}
+            className="px-4 py-1 rounded-md bg-blue-500 text-white flex items-center"
           >
-            <Button>End Interview</Button>
+            <Button>Submit</Button>
           </Link>
         )}
       </div>
