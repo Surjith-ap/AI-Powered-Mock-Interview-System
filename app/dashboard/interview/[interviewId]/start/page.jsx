@@ -91,7 +91,7 @@ const StartInterview = ({ params }) => {
       const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
-      const prompt = `Based on this interview answer: "${answer}", generate 2 relevant follow-up questions that would help assess the candidate's knowledge and experience. 
+      const prompt = `Based on this interview answer: "${answer}", generate 1 relevant follow-up questions that would help assess the candidate's knowledge and experience. 
 
 For each question, also provide a model answer that would be considered a good response. 
 
