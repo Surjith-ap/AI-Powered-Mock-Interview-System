@@ -157,7 +157,7 @@ app.post('/analyze-emotion', async (req, res) => {
           cleanupProcess(pythonProcess);
           reject(new Error('Emotion analysis timed out after 10 seconds'));
         }
-      }, 10000); // 10 second timeout
+      }, 20000); // 20 second timeout
       
       let result = '';
       let error = '';
