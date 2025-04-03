@@ -50,7 +50,7 @@ const Contect = () => {
   };
   return (
     <div className="container mx-auto text-center">
-      <h2 className="text-4xl font-bold text-gray-800">Get In Touch</h2>
+      <h2 className="text-4xl font-bold text-white-800">Get In Touch</h2>
       <p className="mt-4 text-lg text-gray-600">
         Have any questions? Reach out to us and we'll get back to you as soon as
         possible.
@@ -62,20 +62,20 @@ const Contect = () => {
             placeholder="Your Name"
             value={name}
             onChange={handleInputChange(setName)}
-            className="w-full px-4 py-3 mb-4 text-lg border border-gray-300 rounded-lg"
+            className="w-full px-4 py-3 mb-4 text-lg border border-gray-300 rounded-lg text-black"
           />
           <input
             type="email"
             placeholder="Your Email"
             value={email}
             onChange={handleInputChange(setEmail)}
-            className="w-full px-4 py-3 mb-4 text-lg border border-gray-300 rounded-lg"
+            className="w-full px-4 py-3 mb-4 text-lg border border-gray-300 rounded-lg text-black"
           />
           <textarea
             placeholder="Your Message"
             value={message}
             onChange={handleInputChange(setMessage)}
-            className="w-full px-4 py-3 mb-4 text-lg border border-gray-300 rounded-lg"
+            className="w-full px-4 py-3 mb-4 text-lg border border-gray-300 rounded-lg text-black"
             rows="4"
           />
           <button

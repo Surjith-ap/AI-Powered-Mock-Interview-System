@@ -56,6 +56,16 @@ const Header = ({ logo }) => {
               How it works?
             </li>
           </Link>
+          
+          <Link href="/dashboard/analytics">
+            <li
+              className={`hover:text-black hover:font-bold transition-all cursor-pointer ${
+                path == "/dashboard/analytics" && "text-black font-bold"
+              }`}
+            >
+              Analytics
+            </li>
+          </Link>
         </ul>
         <div className="md:hidden">
           <button onClick={toggleMenu} className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
@@ -97,6 +107,16 @@ const Header = ({ logo }) => {
               }`}
             >
               How it works?
+            </li>
+          </Link>
+          
+          <Link href="/dashboard/analytics">
+            <li
+              className={`hover:text-black hover:font-bold transition-all cursor-pointer ${
+                path == "/dashboard/analytics" && "text-black font-bold"
+              }`}
+            >
+              Analytics
             </li>
           </Link>
           </ul>
