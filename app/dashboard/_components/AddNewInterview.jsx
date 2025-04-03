@@ -128,7 +128,8 @@ const AddNewInterview = ({ initialResumeData }) => {
 Resume Text:
 ${resumeText}
 
-Based on the resume text, please provide "${process.env.NEXT_PUBLIC_QUESTION_COUNT}" interview questions with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
+Based on the resume text, please provide "${process.env.NEXT_PUBLIC_QUESTION_COUNT}" interview questions these questions should cover the skills and technologies listed in the resume 
+, asking for specific examples and experiences. Additionally,include general interview questions such as salary expectations, strengths and weaknesses, career goals, and how the candidate handles challenges and teamwork with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
 `;
 
       const result = await chatSession.sendMessage(InputPrompt);

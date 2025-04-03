@@ -155,9 +155,9 @@ app.post('/analyze-emotion', async (req, res) => {
         if (pythonProcess) {
           console.error('[AI Mock Interview Server ERROR] Python process timeout - killing process');
           cleanupProcess(pythonProcess);
-          reject(new Error('Emotion analysis timed out after 10 seconds'));
+          reject(new Error('Emotion analysis timed out after 30 seconds'));
         }
-      }, 20000); // 20 second timeout
+      }, 30000); // 30 second timeout
       
       let result = '';
       let error = '';

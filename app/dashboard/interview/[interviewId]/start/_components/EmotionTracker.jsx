@@ -65,7 +65,7 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
       
       const response = await fetch(`${EMOTION_SERVER_URL}`, { 
         method: 'GET',
-        signal: AbortSignal.timeout(10000) // Timeout after 10 seconds
+        signal: AbortSignal.timeout(30000) // Timeout after 30 seconds
       });
       return response.ok;
     } catch (error) {
@@ -148,7 +148,7 @@ const EmotionTracker = ({ videoRef, onEmotionUpdate }) => {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({ imageData }),
-            signal: controller.signal
+            signal: AbortSignal.timeout(30000)
           });
           
           if (!response.ok) {
