@@ -1,22 +1,33 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export async function evaluateAnswerSimilarity(question, userAnswer, correctAnswer) {
+export async function evaluateAnswerSimilarity(question, userAnswer, correctAnswer = '', resumeContent = '') {
   const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   
   const prompt = `
-    Compare the following interview answer with the correct answer and provide:
-    1. A similarity score (0-10) based on how well the user's answer covers the key points, technical accuracy, and overall correctness
-    2. Detailed feedback explaining the score
+    You are an expert technical interviewer evaluating a candidate's response to an interview question.
     
     Question: ${question}
-    Correct Answer: ${correctAnswer}
-    User's Answer: ${userAnswer}
+    Candidate's Answer: ${userAnswer}
     
-    Return the response in JSON format with fields:
+    ${resumeContent ? `Candidate's Resume:\n${resumeContent}\n` : ''}
+    
+    Please evaluate the answer thoroughly based on:
+    
+    1. Technical Accuracy: Is the information factually correct? Are concepts, terms, and technologies used properly?
+    
+    2. Completeness: Does the answer address all key aspects of the question ?
+    
+    3. Relevance to Experience: If resume is provided, how well does the answer reflect the candidate's stated skills and experience?
+    
+    4. Communication Quality: Is the answer structured and clear?
+    
+    Provide a detailed evaluation with specific examples from the answer.
+    
+    Return a JSON object with exactly these fields:
     {
-      "rating": number,
-      "feedback": string
+      "rating": number (0-10 score),
+      "feedback": string (detailed feedback with strengths and areas for improvement)
     }
   `;
   
@@ -26,6 +37,10 @@ export async function evaluateAnswerSimilarity(question, userAnswer, correctAnsw
     return JSON.parse(responseText);
   } catch (error) {
     console.error("Error evaluating answer similarity:", error);
-    throw error;
+    // Return a fallback response in case of parsing errors
+    return {
+      rating: 5,
+      feedback: "Unable to properly evaluate the answer due to a technical issue. Please try again."
+    };
   }
 } 

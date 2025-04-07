@@ -1,0 +1,1 @@
+ALTER TABLE "userAnswer" DROP COLUMN IF EXISTS "criteriaScores";

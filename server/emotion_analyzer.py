@@ -142,7 +142,7 @@ def analyze_emotion(image_path=None, base64_image=None):
         }
         
         # Calculate confidence score
-        confidence = emotion_weights.get(dominant_emotion, 0.5)
+        confidence = emotion_weights.get(dominant_emotion, 0.5)*10
         print(f"Calculated confidence score: {confidence}", file=sys.stderr)
 
         # Prepare result before cleanup

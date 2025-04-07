@@ -120,10 +120,15 @@ const ResumesPage = () => {
         return;
       }
 
-      // Construct the prompt with resume text (same as in AddNewInterview)
+      // Set default values for job details (similar to AddNewInterview)
+      const jobPosition = resume.jobPosition || "Not specified";
+      const jobDesc = resume.jobDesc || "Not specified";
+      const jobExperience = resume.jobExperience || "0";
+      
+      // Construct the prompt with resume text
       const InputPrompt = `
 Resume Text:
-${resumeText}
+${resume.extractedText}
 
 Based on the resume text, please provide "${process.env.NEXT_PUBLIC_QUESTION_COUNT}" interview questions with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
 `;
@@ -140,11 +145,6 @@ Based on the resume text, please provide "${process.env.NEXT_PUBLIC_QUESTION_COU
 
       if (MockJsonResp) {
         const mockId = uuidv4();
-        
-        // Set default values for job details (similar to AddNewInterview)
-        const jobPosition = resume.jobPosition || "Not specified";
-        const jobDesc = resume.jobDesc || "Not specified";
-        const jobExperience = resume.jobExperience || "0";
         
         // Insert into MockInterview table
         const resp = await db

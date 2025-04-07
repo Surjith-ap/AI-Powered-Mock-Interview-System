@@ -104,7 +104,7 @@ const Feedback = ({ params }) => {
          <h2 className="text-3xl font-bold text-green-500">Congratulations</h2>
          <h2 className="font-bold text-2xl">Here is your interview feedback</h2>
           <h2 className="text-primary text-lg my-3">
-            Your overall answer similarity rating{" "}
+            Your overall answer rating{" "}
             <strong
               className={`${
                 overallRating >= 5 ? "text-green-500" : "text-red-600"
@@ -120,11 +120,12 @@ const Feedback = ({ params }) => {
             <EmotionFeedback 
               emotionData={combinedEmotionData} 
               confidenceScore={overallConfidenceScore} 
+              showEmotionDistribution={false}
             />
           )}
           
           <h2 className="text-sm text-gray-500 mt-6">
-            Find below each interview question with the correct answer, your answer, and similarity-based feedback
+            Find below each interview question with your answer and personalized feedback
           </h2>
           {feedbackList &&
             feedbackList.map((item, index) => (
@@ -136,7 +137,7 @@ const Feedback = ({ params }) => {
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap gap-2">
                       <h2 className="text-red-500 p-2 border rounded-lg">
-                        <strong>Similarity Score: </strong>
+                        <strong>Score: </strong>
                         {item.rating}/10
                       </h2>
                       {item.confidenceScore && (
@@ -149,10 +150,6 @@ const Feedback = ({ params }) => {
                     <h2 className="p-2 border rounded-lg bg-red-50 text-sm text-red-900">
                       <strong>Your Answer: </strong>
                       {item.userAns}
-                    </h2>
-                    <h2 className="p-2 border rounded-lg bg-green-50 text-sm text-green-900">
-                      <strong>Correct Answer: </strong>
-                      {item.correctAns}
                     </h2>
                     <h2 className="p-2 border rounded-lg bg-blue-50 text-sm text-primary-900">
                       <strong>Feedback: </strong>

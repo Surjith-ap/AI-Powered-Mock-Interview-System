@@ -9,7 +9,7 @@ import {
   AlertCircle 
 } from 'lucide-react';
 
-const EmotionFeedback = ({ emotionData, confidenceScore }) => {
+const EmotionFeedback = ({ emotionData, confidenceScore, showEmotionDistribution = false }) => {
   // Parse emotion data if it's a string
   const parsedEmotionData = useMemo(() => {
     if (!emotionData) return [];
@@ -155,8 +155,8 @@ const EmotionFeedback = ({ emotionData, confidenceScore }) => {
         </div>
       </div>
       
-      {/* Emotion Distribution */}
-      {emotionStats && (
+      {/* Emotion Distribution - Only displayed if showEmotionDistribution is true */}
+      {showEmotionDistribution && emotionStats && (
         <div className="mt-4">
           <h4 className="font-medium text-blue-700 mb-2">Emotion Distribution</h4>
           <div className="grid grid-cols-3 gap-2 text-center">

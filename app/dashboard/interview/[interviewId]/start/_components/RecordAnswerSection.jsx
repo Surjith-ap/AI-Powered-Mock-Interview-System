@@ -8,13 +8,14 @@ import { Mic, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { chatSession } from "@/utils/GeminiAIModal";
 import { db } from "@/utils/db";
-import { UserAnswer } from "@/utils/schema";
+import { UserAnswer, Resume } from "@/utils/schema";
 import { useUser } from "@clerk/nextjs";
 import moment from "moment";
 import { WebCamContext } from "@/app/dashboard/layout";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import EmotionTracker from "./EmotionTracker";
 import { evaluateAnswerSimilarity } from "@/utils/answerEvaluator";
+import { eq } from "drizzle-orm";
 
 const RecordAnswerSection = ({
   mockInterviewQuestion,
@@ -135,15 +136,34 @@ const RecordAnswerSection = ({
       const currentQuestion = mockInterviewQuestion?.[activeQuestionIndex]?.Question;
       const correctAnswer = mockInterviewQuestion?.[activeQuestionIndex]?.Answer;
       
-      if (!currentQuestion || !correctAnswer) {
-        throw new Error('Missing question or answer data');
+      if (!currentQuestion) {
+        throw new Error('Missing question data');
       }
 
-      // Use similarity-based scoring for all questions (both original and follow-up)
+      // Fetch user's resume from database
+      let resumeContent = "";
+      try {
+        const userEmail = user?.primaryEmailAddress?.emailAddress;
+        const resumeData = await db.select()
+          .from(Resume)
+          .where(eq(Resume.userEmail, userEmail))
+          .orderBy(Resume.createdAt, 'desc') // Get the most recent resume
+          .limit(1);
+
+        if (resumeData && resumeData.length > 0) {
+          resumeContent = resumeData[0].extractedText || "";
+        }
+      } catch (resumeError) {
+        console.error("Error fetching resume:", resumeError);
+        // Continue without resume content if there's an error
+      }
+
+      // Use resume-based scoring without needing a reference answer
       const jsonFeedbackResp = await evaluateAnswerSimilarity(
         currentQuestion,
         userAnswer,
-        correctAnswer
+        undefined,  // No need to pass correctAnswer
+        resumeContent
       );
       
       // Calculate average confidence score
@@ -162,7 +182,7 @@ const RecordAnswerSection = ({
       const resp = await db.insert(UserAnswer).values({
         mockIdRef: interviewData?.mockId,
         question: currentQuestion,
-        correctAns: correctAnswer,
+        correctAns: correctAnswer || '',  // Still save the correct answer if available
         userAns: userAnswer,
         feedback: jsonFeedbackResp.feedback,
         rating: jsonFeedbackResp.rating.toString(),
@@ -173,7 +193,7 @@ const RecordAnswerSection = ({
       });
 
       if (resp) {
-        toast("Answer evaluated with similarity scoring");
+        toast("Answer evaluated based on your resume");
         
         // If this is not a generated question, trigger generation of follow-up questions
         if (!isGeneratedQuestion && typeof onAnswerSubmitted === 'function') {
