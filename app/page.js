@@ -11,7 +11,7 @@ const page = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-black text-white">
       <Head>
-        <title>AI Mock Interview</title>
+        <title>Hire.ai</title>
         <meta name="description" content="Ace your next interview with AI-powered mock interviews" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
@@ -26,7 +26,7 @@ const page = () => {
               transition={{ duration: 0.5 }}
               className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent"
             >
-              AI Mock Interview
+              Hire.ai
             </motion.h1>
           </div>
         </header>
